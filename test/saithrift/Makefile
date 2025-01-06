@@ -1,7 +1,7 @@
 CXX = $(CROSS_COMPILE)g++
 
-SAI_PREFIX = /usr
-SAI_HEADER_DIR ?= $(SAI_PREFIX)/include/sai
+SAI_PREFIX = /SAI/SAI
+SAI_HEADER_DIR ?= $(SAI_PREFIX)/inc
 SAI_HEADERS = $(SAI_HEADER_DIR)/sai*.h
 CFLAGS = -I$(SAI_HEADER_DIR) -I. -I../../experimental -std=c++11
 ifeq ($(DEBUG),1)
@@ -45,7 +45,7 @@ LIBS += -lsaivs -lsaimeta -lsaimetadata -lzmq
 else
 LIBS += -lsai
 endif
-SAI_LIBRARY_DIR ?= $(SAI_PREFIX)/lib
+SAI_LIBRARY_DIR ?= /SAI/lib
 LDFLAGS = -L$(SAI_LIBRARY_DIR) -Wl,-rpath=$(SAI_LIBRARY_DIR)
 CPP_SOURCES = \
 				src/gen-cpp/switch_sai_rpc.cpp \

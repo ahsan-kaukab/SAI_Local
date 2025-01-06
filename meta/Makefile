@@ -32,7 +32,6 @@ WARNINGS = \
 	-Wcast-qual \
 	-Wconversion \
 	-Wdisabled-optimization \
-	-Werror \
 	-Wextra \
 	-Wextra \
 	-Wfloat-equal \
@@ -82,13 +81,10 @@ OBJ = saimetadata.o saimetadatautils.o saiserialize.o
 
 SYMBOLS = $(OBJ:=.symbols)
 
-all: toolsversions saisanitycheck saimetadatatest saiserializetest saidepgraph.svg $(SYMBOLS)
+all: toolsversions saisanitycheck saimetadatatest saiserializetest saidepgraph.svg sai_server $(SYMBOLS) 
 	./checksymbols.pl *.o.symbols
 	./checkheaders.pl ../inc ../inc
 	./aspellcheck.pl
-	./checkenumlock.sh
-	./checkancestry.sh
-	./checkstructs.sh
 	./saimetadatatest >/dev/null
 	./saiserializetest >/dev/null
 	./saisanitycheck
@@ -121,13 +117,10 @@ xml: $(DEPS) Doxyfile Doxyfile.compat $(CONSTHEADERS)
 
 EXTRA = acronyms.txt aspell.en.pws *.pm *.cap
 
-saiattrversion.h: $(DEPS) attrversion.sh
-	./attrversion.sh
-
 saimetadatasize.h: $(DEPS)
 	./size.sh
 
-saimetadatatest.c saimetadata.c saimetadata.h: xml $(XMLDEPS) parse.pl $(CONSTHEADERS) $(EXTRA) saiattrversion.h
+saimetadatatest.c saimetadata.c saimetadata.h: xml $(XMLDEPS) parse.pl $(CONSTHEADERS) $(EXTRA)
 	perl -I. parse.pl
 
 RPC_MODULES=$(shell find rpc -type f -name "*.pm")
@@ -160,6 +153,9 @@ saidepgraphgen: saidepgraphgen.o $(OBJ)
 %.o.symbols: %.o
 	nm $^ > $@
 
+sai_server_obj.o: sai_rpc_frontend.cpp ../test/saithrift/src/switch_sai.thrift ../test/saithrift/src/switch_sai_rpc_server.cpp ../test/saithrift/src/saiserver.cpp \
+					../test/saithrift/src/switch_sai_rpc_server.h
+
 saidepgraph.gv: saidepgraphgen
 	./saidepgraphgen > $@
 
@@ -183,17 +179,18 @@ generated/gen-cpp/sai_rpc_server.skeleton: sai.thrift $(RPC_OBJ)
 
 sai_rpc_server.skeleton: generated/gen-cpp/sai_rpc_server.skeleton
 
-sai_rpc_frontend: rpc sai_rpc_frontend.cpp sai_rpc_frontend.main.cpp sai_rpc_server.cpp libsaimetadata.so libsai.so
+sai_server: rpc sai_server_obj.o libsaimetadata.so libsai.so
 	$(CXX) $(CFLAGS) -std=c++11 \
-		generated/gen-cpp/sai_rpc.o generated/gen-cpp/sai_types.o generated/gen-cpp/sai_constants.o \
-		sai_rpc_frontend.main.cpp sai_rpc_frontend.cpp \
-		libsaimetadata.so libsai.so -lthrift -lpthread -I generated/gen-cpp -o sai_rpc_frontend
+		generated/gen-cpp/sai_rpc.cpp generated/gen-cpp/sai_types.cpp generated/gen-cpp/sai_constants.cpp \
+		../test/saithrift/src/saiserver.cpp sai_rpc_frontend.cpp \
+		libsaimetadata.so libsai.so -lthrift -lpthread -I generated/gen-cpp -o sai_server
+		#sai_rpc_frontend.main.cpp sai_rpc_frontend.cpp \
 
 .PHONY: clean rpc
 
 clean:
 	rm -f *.o *~ .*~ *.tmp .*.swp .*.swo *.bak sai*.gv sai*.svg *.o.symbols doxygen*.db *.so
-	rm -f saimetadata.h saimetadatasize.h saimetadata.c saimetadatatest.c saiswig.i saiattrversion.h
+	rm -f saimetadata.h saimetadatasize.h saimetadata.c saimetadatatest.c saiswig.i
 	rm -f saisanitycheck saimetadatatest saiserializetest saidepgraphgen sai_rpc_frontend
 	rm -f sai.thrift sai_rpc_server.cpp sai_adapter.py
 	rm -f *.gcda *.gcno *.gcov

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -5,7 +6,6 @@
 #include <unistd.h>
 #include <sys/queue.h>
 #include <sys/types.h>
-#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <set>
@@ -20,14 +20,15 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include "switch_sai_rpc.h"
-#include "switch_sai_rpc_server.h"
+#include "sai_rpc.h"
 
 #define UNREFERENCED_PARAMETER(P)   (P)
 
 extern "C" {
 #include "sai.h"
 #include "saistatus.h"
+#include "switch_sai_rpc_server.h"
+int start_sai_thrift_rpc_server(int port);
 }
 
 
@@ -38,7 +39,7 @@ sai_switch_api_t* sai_switch_api;
 std::map<std::string, std::string> gProfileMap;
 std::map<std::set<int>, std::string> gPortMap;
 
-extern std::vector<std::pair<sai_fdb_entry_t, sai_object_id_t>> gFdbMap;
+std::vector<std::pair<sai_fdb_entry_t, sai_object_id_t>> gFdbMap;
 
 sai_object_id_t gSwitchId; ///< SAI switch global object ID.
 
