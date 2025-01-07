@@ -81,7 +81,7 @@ OBJ = saimetadata.o saimetadatautils.o saiserialize.o
 
 SYMBOLS = $(OBJ:=.symbols)
 
-all: toolsversions saisanitycheck saimetadatatest saiserializetest saidepgraph.svg sai_server $(SYMBOLS) 
+all: toolsversions saisanitycheck saimetadatatest saiserializetest saidepgraph.svg $(SYMBOLS)
 	./checksymbols.pl *.o.symbols
 	./checkheaders.pl ../inc ../inc
 	./aspellcheck.pl
