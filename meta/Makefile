@@ -68,7 +68,7 @@ BINS = doxygen perl dot
 
 $(foreach bin,$(BINS),$(if $(shell which $(bin)),,$(error "Missing $(bin) in PATH")))
 
-CFLAGS += -I../inc -I../experimental -fPIC $(WARNINGS)
+CFLAGS += -I./include -I../inc -I../experimental -fPIC $(WARNINGS)
 
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
