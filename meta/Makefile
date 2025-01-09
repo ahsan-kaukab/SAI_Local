@@ -68,7 +68,7 @@ BINS = doxygen perl dot
 
 $(foreach bin,$(BINS),$(if $(shell which $(bin)),,$(error "Missing $(bin) in PATH")))
 
-CFLAGS += -I./include -I../inc -I../experimental -fPIC $(WARNINGS)
+CFLAGS += -I../inc -I../experimental -I/SAI/SAI/meta -fPIC $(WARNINGS)
 
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
@@ -89,8 +89,8 @@ all: toolsversions saisanitycheck saimetadatatest saiserializetest saidepgraph.s
 	./saiserializetest >/dev/null
 	./saisanitycheck
 
-apitest: saimetadatatest.c
-	$(CC) -o apitest saimetadatatest.c -DAPI_IMPLEMENTED_TEST -lsai $(CFLAGS) $(OBJ)
+apitest: saimetadatatest.c libsai.so
+	$(CC) -o apitest saimetadatatest.c -DAPI_IMPLEMENTED_TEST /SAI/SAI/meta/libsai.so $(CFLAGS) $(OBJ)
 	./apitest
 
 toolsversions:
