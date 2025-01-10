@@ -592,7 +592,7 @@ int main(int argc, char **argv)
     // Main program loop or thread handling logic can go here.
 
     // Cleanup and shutdown
-    on_fdb_event();
+    //on_fdb_event();
     close(_model_socket);
     sai_api_uninitialize();
 
