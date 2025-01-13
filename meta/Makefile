@@ -68,7 +68,7 @@ BINS = doxygen perl dot
 
 $(foreach bin,$(BINS),$(if $(shell which $(bin)),,$(error "Missing $(bin) in PATH")))
 
-CFLAGS += -I./include -I../inc -I../experimental -I/SAI/SAI/meta -fPIC $(WARNINGS)
+CFLAGS += -I../inc -I../experimental -fPIC $(WARNINGS)
 
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
@@ -89,7 +89,7 @@ all: toolsversions saisanitycheck saimetadatatest saiserializetest saidepgraph.s
 	./saiserializetest >/dev/null
 	./saisanitycheck
 
-apitest: saimetadatatest.c libsai.so
+apitest: saimetadatatest.c
 	$(CC) -o apitest saimetadatatest.c -DAPI_IMPLEMENTED_TEST /SAI/SAI/meta/libsai.so $(CFLAGS) $(OBJ)
 	./apitest
 
@@ -138,6 +138,9 @@ HEADERS = saimetadata.h saimetadatasize.h $(CONSTHEADERS)
 %.o: %.cpp $(HEADERS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
+sai_server_obj.o: sai_rpc_frontend.cpp ../test/saithrift/src/switch_sai.thrift ../test/saithrift/src/switch_sai_rpc_server.cpp ../test/saithrift/src/saiserver.cpp \
+					../test/saithrift/src/switch_sai_rpc_server.h
+
 saisanitycheck: saisanitycheck.o $(OBJ)
 	$(CC) -o $@ $^
 
@@ -152,9 +155,6 @@ saidepgraphgen: saidepgraphgen.o $(OBJ)
 
 %.o.symbols: %.o
 	nm $^ > $@
-
-sai_server_obj.o: sai_rpc_frontend.cpp ../test/saithrift/src/switch_sai.thrift ../test/saithrift/src/switch_sai_rpc_server.cpp ../test/saithrift/src/saiserver.cpp \
-					../test/saithrift/src/switch_sai_rpc_server.h
 
 saidepgraph.gv: saidepgraphgen
 	./saidepgraphgen > $@
@@ -179,12 +179,17 @@ generated/gen-cpp/sai_rpc_server.skeleton: sai.thrift $(RPC_OBJ)
 
 sai_rpc_server.skeleton: generated/gen-cpp/sai_rpc_server.skeleton
 
+sai_rpc_frontend: rpc sai_rpc_frontend.cpp sai_rpc_frontend.main.cpp sai_rpc_server.cpp libsaimetadata.so libsai.so
+	$(CXX) $(CFLAGS) -std=c++11 \
+		generated/gen-cpp/sai_rpc.o generated/gen-cpp/sai_types.o generated/gen-cpp/sai_constants.o \
+		sai_rpc_frontend.main.cpp sai_rpc_frontend.cpp \
+		libsaimetadata.so libsai.so -lthrift -lpthread -I generated/gen-cpp -o sai_rpc_frontend
+
 sai_server: rpc sai_server_obj.o libsaimetadata.so libsai.so
 	$(CXX) $(CFLAGS) -std=c++11 \
 		generated/gen-cpp/sai_rpc.cpp generated/gen-cpp/sai_types.cpp generated/gen-cpp/sai_constants.cpp \
 		../test/saithrift/src/saiserver.cpp sai_rpc_frontend.cpp \
 		libsaimetadata.so libsai.so -lthrift -lpthread -I generated/gen-cpp -o sai_server
-		#sai_rpc_frontend.main.cpp sai_rpc_frontend.cpp \
 
 .PHONY: clean rpc
 

@@ -22,18 +22,6 @@
 #include <arpa/inet.h>
 #include "sai_rpc.h"
 
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <cstdio>
-#include <iostream>
-#include <string>
-#include <vector>
-
-#include "rapidjson/writer.h"
-#include "rapidjson/stringbuffer.h"
-
 #define UNREFERENCED_PARAMETER(P)   (P)
 
 extern "C" {
@@ -43,12 +31,10 @@ extern "C" {
 int start_sai_thrift_rpc_server(int port);
 }
 
+
 #define SWITCH_SAI_THRIFT_RPC_SERVER_PORT 9092
-#define MODEL_PORT 46500
-#define MODEL_IP "127.0.0.1"
 
 sai_switch_api_t* sai_switch_api;
-static int _model_socket;
 
 std::map<std::string, std::string> gProfileMap;
 std::map<std::set<int>, std::string> gPortMap;
@@ -57,155 +43,9 @@ std::vector<std::pair<sai_fdb_entry_t, sai_object_id_t>> gFdbMap;
 
 sai_object_id_t gSwitchId; ///< SAI switch global object ID.
 
-class InsertRequest {
-public:
-    class Value {
-    public:
-        class Ternary {
-        public:
-            std::string value;
-            std::string mask;
-        };
-        class LPM {
-        public:
-            std::string value;
-            int prefix_len;
-        };
-        class Range {
-        public:
-            std::string first;
-            std::string last;
-        };
-
-        std::string exact;
-        Ternary ternary;
-        LPM prefix;
-        Range range;
-        std::vector<Ternary> ternary_list;
-        std::vector<Range> range_list;
-    };
-
-    int table;
-    std::vector<Value> values;
-    int action;
-    std::vector<std::string> params;
-    int priority;
-
-    std::string jsonize() {
-        rapidjson::StringBuffer s;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(s);
-
-        writer.StartObject();
-            writer.Key("table");
-            writer.Uint(table);
-
-            writer.Key("values");
-            writer.StartArray();
-            for (auto & v : values) {
-                writer.StartObject();
-                    writer.Key("exact");
-                    writer.String(v.exact.c_str());
-
-                    writer.Key("ternary");
-                    writer.StartObject();
-                        writer.Key("value");
-                        writer.String(v.ternary.value.c_str());
-
-                        writer.Key("mask");
-                        writer.String(v.ternary.mask.c_str());
-                    writer.EndObject();
-
-                    writer.Key("prefix");
-                    writer.StartObject();
-                        writer.Key("value");
-                        writer.String(v.prefix.value.c_str());
-
-                        writer.Key("prefix_len");
-                        writer.Uint(v.prefix.prefix_len);
-                    writer.EndObject();
-
-                    writer.Key("range");
-                    writer.StartObject();
-                        writer.Key("first");
-                        writer.String(v.range.first.c_str());
-
-                        writer.Key("last");
-                        writer.String(v.range.last.c_str());
-                    writer.EndObject();
-
-                    writer.Key("ternary_list");
-                    writer.StartArray();
-                    for (auto & item : v.ternary_list) {
-                        writer.StartObject();
-                            writer.Key("value");
-                            writer.String(item.value.c_str());
-
-                            writer.Key("mask");
-                            writer.String(item.mask.c_str());
-                        writer.EndObject();
-                    }
-                    writer.EndArray();
-
-                    writer.Key("range_list");
-                    writer.StartArray();
-                    for (auto & item : v.range_list) {
-                        writer.StartObject();
-                            writer.Key("first");
-                            writer.String(item.first.c_str());
-
-                            writer.Key("last");
-                            writer.String(item.last.c_str());
-                        writer.EndObject();
-                    }
-                    writer.EndArray();
-                writer.EndObject();
-            }
-            writer.EndArray();
-
-            writer.Key("action");
-            writer.Uint(action);
-
-            writer.Key("params");
-            writer.StartArray();
-            for (auto & p : params) {
-                writer.String(p.c_str());
-            }
-            writer.EndArray();
-
-            writer.Key("priority");
-            writer.Uint(priority);
-        writer.EndObject();
-
-        const char * buf = s.GetString();
-        int buf_size = s.GetSize();
-        return std::string(buf, buf_size);
-    }
-};
-
 void on_switch_state_change(_In_ sai_object_id_t switch_id,
                             _In_ sai_switch_oper_status_t switch_oper_status)//
 {
-}
-
-void model_api_insert(InsertRequest& insertRequest) {
-    uint8_t api_id = 0;
-    uint32_t json_buf_size;
-    const char *json_buf;
-    char json_buf_size_cstr[16];
-    bool status;
-
-    send(_model_socket, &api_id, sizeof(uint8_t), 0);
-
-    std::string json_repr = insertRequest.jsonize();
-    json_buf = json_repr.c_str();
-    json_buf_size = strlen(json_buf);
-
-    snprintf(json_buf_size_cstr, 16, "%08X", json_buf_size);
-    send(_model_socket, json_buf_size_cstr, 8, 0);
-
-    send(_model_socket, json_buf, json_buf_size, 0);
-
-    read(_model_socket, &status, 1);
 }
 
 void on_fdb_event(_In_ uint32_t count,
@@ -216,64 +56,78 @@ void on_fdb_event(_In_ uint32_t count,
     uint32_t attr_count;
     sai_attribute_t *attr;
     sai_object_id_t bv_id;
-    sai_object_id_t bport_id = 0;
-
+    sai_object_id_t bport_id;
+    
     attr = data->attr;
     event_type = data->event_type;
     fdb_entry = data->fdb_entry;
     bv_id = fdb_entry.bv_id;
-    attr_count = data->attr_count;
-
+    attr_count = data ->attr_count;
+    
     for (uint32_t i = 0; i < attr_count; i++)
     {
         if (attr[i].id == SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID)
             bport_id = attr[i].value.oid;
     }
-
-    InsertRequest insertRequest;
-    insertRequest.table = 19;  // Example table ID
-
-    InsertRequest::Value fdb_value;
-    fdb_value.exact = std::string(reinterpret_cast<const char *>(fdb_entry.mac_address), 6); // Use MAC as exact match
-
-    // Handle different FDB event types
+           
+    sai_fdb_entry_t fdb_m;
+    sai_object_id_t b_id;
+      
     switch (event_type)
-    {
-    case SAI_FDB_EVENT_LEARNED:
-        fdb_value.ternary.value = std::to_string(bv_id);
-        fdb_value.ternary.mask = std::to_string(bport_id);
-        insertRequest.values.push_back(fdb_value);
-        insertRequest.action = 20; // Example action ID for "LEARNED"
-        model_api_insert(insertRequest);
-        break;
-
-    case SAI_FDB_EVENT_FLUSHED:
-        // Example: Send a flush event to the model
-        insertRequest.action = 21; // Example action ID for "FLUSHED"
-        model_api_insert(insertRequest);
-        break;
-
-    case SAI_FDB_EVENT_MOVE:
-        fdb_value.ternary.value = std::to_string(bv_id);
-        fdb_value.ternary.mask = std::to_string(bport_id);
-        insertRequest.values.push_back(fdb_value);
-        insertRequest.action = 22; // Example action ID for "MOVE"
-        model_api_insert(insertRequest);
-        break;
-
-    case SAI_FDB_EVENT_AGED:
-        fdb_value.ternary.value = std::to_string(bv_id);
-        fdb_value.ternary.mask = std::to_string(bport_id);
-        insertRequest.values.push_back(fdb_value);
-        insertRequest.action = 23; // Example action ID for "AGED"
-        model_api_insert(insertRequest);
-        break;
-
-    default:
-        printf("Unknown FDB event type\n");
-        break;
+    {   
+        case SAI_FDB_EVENT_LEARNED:
+            gFdbMap.emplace_back(std::pair<sai_fdb_entry_t, sai_object_id_t>(fdb_entry,bport_id));
+            break;
+        case SAI_FDB_EVENT_FLUSHED: 
+            if (bv_id == 0 && bport_id == 0)
+                gFdbMap.clear();
+            else
+            {
+                for (auto it = gFdbMap.begin(); it != gFdbMap.end(); )
+                {
+                    fdb_m = it->first;
+                    b_id = it->second; 				
+	            
+                    if (bport_id == 0 && bv_id == fdb_m.bv_id)
+                        it = gFdbMap.erase(it);
+                    else if (bv_id == 0 && bport_id == b_id)
+                        it = gFdbMap.erase(it);
+                    else if (bv_id == fdb_m.bv_id && bport_id == b_id)
+                        it = gFdbMap.erase(it);
+                    else
+                        it++;
+                }
+            }
+            break;
+        case SAI_FDB_EVENT_MOVE:
+            for (auto it = gFdbMap.begin(); it != gFdbMap.end(); it++)
+            {
+                fdb_m = it->first;
+                b_id = it->second; 
+                int n = memcmp ( fdb_entry.mac_address, fdb_m.mac_address, 6);
+		    
+                if (n == 0 && bv_id == fdb_m.bv_id)
+                    it->second = bport_id;
+            }
+            break;  
+        case SAI_FDB_EVENT_AGED:
+            for (auto it = gFdbMap.begin(); it != gFdbMap.end(); )
+            {
+                fdb_m = it->first;
+                b_id = it->second; 
+                int n = memcmp ( fdb_entry.mac_address, fdb_m.mac_address, 6);  
+                
+                if (n == 0 && bv_id == fdb_m.bv_id)
+                    it = gFdbMap.erase(it);   
+                else
+                    it++; 	
+            }
+            break;
+        default:
+            printf("unknown event");
+            break;
     }
-}  
+}     
 
 void on_port_state_change(_In_ uint32_t count,
                           _In_ sai_port_oper_status_notification_t *data)
@@ -361,6 +215,27 @@ const sai_service_method_table_t test_services = {
     test_profile_get_value,
     test_profile_get_next_value
 };
+
+#ifdef BRCMSAI
+void sai_diag_shell()
+{
+    sai_status_t status;
+
+    while (true)
+    {
+        sai_attribute_t attr;
+        attr.id = SAI_SWITCH_ATTR_SWITCH_SHELL_ENABLE;
+        attr.value.booldata = true;
+        status = sai_switch_api->set_switch_attribute(gSwitchId, &attr);
+        if (status != SAI_STATUS_SUCCESS)
+        {
+            return;
+        }
+
+        sleep(1);
+    }
+}
+#endif
 
 struct cmdOptions
 {
@@ -476,36 +351,31 @@ void handlePortMap(const std::string& portMapFile)
         if (line.size() > 0 && (line[0] == '#' || line[0] == ';'))
             continue;
 
-        size_t pos = line.find("=");
+        size_t pos = line.find(" ");
 
         if (pos == std::string::npos)
         {
-            printf("not found '=' in line %s\n", line.c_str());
+            printf("not found ' ' in line %s\n", line.c_str());
             continue;
         }
 
-        std::string key = line.substr(0, pos);
-        std::string value = line.substr(pos + 1);
+        std::string fp_value = line.substr(0, pos);
+        std::string lanes    = line.substr(pos + 1);
 
-        std::set<int> portSet;
-        std::stringstream ss(key);
-        int port;
+        // ::isspace : C-Style white space predicate. Locale independent.
+        lanes.erase(std::remove_if(lanes.begin(), lanes.end(), ::isspace), lanes.end());
 
-        while (ss >> port)
+        std::istringstream iss(lanes);
+        std::string lane_str;
+        std::set<int> lane_set;
+
+        while (getline(iss, lane_str, ','))
         {
-            portSet.insert(port);
-            if (ss.peek() == ',')
-                ss.ignore();
+            int lane = stoi(lane_str);
+            lane_set.insert(lane);
         }
 
-        gPortMap[portSet] = value;
-
-        printf("insert: ");
-        for (const auto& p : portSet)
-        {
-            printf("%d,", p);
-        }
-        printf(":%s\n", value.c_str());
+        gPortMap.insert(std::pair<std::set<int>,std::string>(lane_set,fp_value));
     }
 }
 
@@ -519,84 +389,104 @@ void handleInitScript(const std::string& initScript)
     system(initScript.c_str());
 }
 
-
-int model_api_init() {
-    struct sockaddr_in serv_addr;
-    if ((_model_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        std::cout<<"Could not create socket"<<std::endl;
-        return -1;
-    }
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(MODEL_PORT);
-    inet_pton(AF_INET, MODEL_IP, &serv_addr.sin_addr);
-    if (connect(_model_socket, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-        std::cout<<"Could not connect to server"<<std::endl;
-        return -1;
-    }
-    return 0;
-}
-
-int main(int argc, char **argv)
+int
+main(int argc, char* argv[])
 {
-    cmdOptions options = handleCmdLine(argc, argv);
+    int rv = 0;
 
+    auto options = handleCmdLine(argc, argv);
     handleProfileMap(options.profileMapFile);
     handlePortMap(options.portMapFile);
 
-    sai_api_initialize(0, (sai_service_method_table_t *)&test_services);
+    auto status = sai_api_initialize(0, (sai_service_method_table_t *)&test_services);
+    if (status == SAI_STATUS_SUCCESS)
+    {
+        int failed = sai_api_query(SAI_API_SWITCH, (void**)&sai_switch_api);
 
-    sai_api_query(SAI_API_SWITCH, (void **)&sai_switch_api);
+        if (failed > 0)
+        {
+            printf("SAI_API_SWITCH failed for %d apis", failed);
+            exit(EXIT_FAILURE);
+        }
+    }
+    else
+    {
+         printf("FATAL: failed to sai_api_initialize: %d", status);
+         exit(EXIT_FAILURE);
+    }
 
-    sai_attribute_t attr;
-    attr.id = SAI_SWITCH_ATTR_INIT_SWITCH;
-    attr.value.booldata = true;
+    constexpr std::uint32_t attrSz = 5;
 
-    // sai_status_t status = sai_switch_api->create_switch(&gSwitchId, 0, 1, &attr);
-    // if (status != SAI_STATUS_SUCCESS)
-    // {
-    //     printf("Failed to create switch: %d\n", status);
-    //     return EXIT_FAILURE;
-    // }
+    sai_attribute_t attr[attrSz];
 
-    //sai_switch_api->set_switch_attribute(gSwitchId, &attr);
+    std::memset(attr, '\0', sizeof(attr));
+
+    attr[0].id = SAI_SWITCH_ATTR_INIT_SWITCH;
+    attr[0].value.booldata = true;
+
+    attr[1].id = SAI_SWITCH_ATTR_SWITCH_STATE_CHANGE_NOTIFY;
+    attr[1].value.ptr = reinterpret_cast<sai_pointer_t>(&on_switch_state_change);
+
+    attr[2].id = SAI_SWITCH_ATTR_SHUTDOWN_REQUEST_NOTIFY;
+    attr[2].value.ptr = reinterpret_cast<sai_pointer_t>(&on_shutdown_request);
+
+    attr[3].id = SAI_SWITCH_ATTR_FDB_EVENT_NOTIFY;
+    attr[3].value.ptr = reinterpret_cast<sai_pointer_t>(&on_fdb_event);
+
+    attr[4].id = SAI_SWITCH_ATTR_PORT_STATE_CHANGE_NOTIFY;
+    attr[4].value.ptr = reinterpret_cast<sai_pointer_t>(&on_port_state_change);
+
+    status = sai_switch_api->create_switch(&gSwitchId, attrSz, attr);
+    if (status != SAI_STATUS_SUCCESS)
+    {
+        printf("Error: Failed to create switch: %d \n", status);
+        exit(EXIT_FAILURE);
+    }
+
+    //in case of the brcm switch not (!defined(INCLUDE_KNET) && !defined(BCMSIM))
+    sai_attribute_t attr_pkt;
+    attr_pkt.id = SAI_SWITCH_ATTR_PACKET_EVENT_NOTIFY;
+    attr_pkt.value.ptr = reinterpret_cast<sai_pointer_t>(&on_packet_event);
+    status = sai_switch_api->set_switch_attribute(gSwitchId, &attr_pkt);
+    if (status != SAI_STATUS_SUCCESS)
+    {
+        printf("Warn: Failed to set_switch_attribute SAI_SWITCH_ATTR_PACKET_EVENT_NOTIFY : %d \n", status);
+    }
+
+    handleInitScript(options.initScript);
+
+#ifdef BRCMSAI
+    std::thread bcm_diag_shell_thread = std::thread(sai_diag_shell);
+    bcm_diag_shell_thread.detach();
+#endif
 
     start_sai_thrift_rpc_server(SWITCH_SAI_THRIFT_RPC_SERVER_PORT);
-    // if (status != 0)
-    // {
-    //     printf("Failed to start SAI Thrift RPC server\n");
-    //     return EXIT_FAILURE;
-    // }
 
-    printf("SAI Thrift RPC server started on port %d\n", SWITCH_SAI_THRIFT_RPC_SERVER_PORT);
+    const sai_log_level_t log_level = SAI_LOG_LEVEL_NOTICE;
 
-    _model_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (_model_socket < 0)
-    {
-        perror("Socket creation failed");
-        return EXIT_FAILURE;
-    }
-
-    struct sockaddr_in model_addr;
-    model_addr.sin_family = AF_INET;
-    model_addr.sin_port = htons(MODEL_PORT);
-    inet_pton(AF_INET, MODEL_IP, &model_addr.sin_addr);
-
-    if (connect(_model_socket, (struct sockaddr *)&model_addr, sizeof(model_addr)) < 0)
-    {
-        perror("Failed to connect to model API");
-        return EXIT_FAILURE;
-    }
-
-    printf("Connected to model API at %s:%d\n", MODEL_IP, MODEL_PORT);
-
-    // Main program loop or thread handling logic can go here.
-
-    // Cleanup and shutdown
-    //on_fdb_event();
-    close(_model_socket);
-    sai_api_uninitialize();
+    sai_log_set(SAI_API_ACL, log_level);
+    sai_log_set(SAI_API_BRIDGE, log_level);
+    sai_log_set(SAI_API_BUFFER, log_level);
+    sai_log_set(SAI_API_DEBUG_COUNTER, log_level);
+    sai_log_set(SAI_API_FDB, log_level);
+    sai_log_set(SAI_API_HOSTIF, log_level);
+    sai_log_set(SAI_API_LAG, log_level);
+    sai_log_set(SAI_API_MIRROR, log_level);
+    sai_log_set(SAI_API_NEIGHBOR, log_level);
+    sai_log_set(SAI_API_NEXT_HOP, log_level);
+    sai_log_set(SAI_API_NEXT_HOP_GROUP, log_level);
+    sai_log_set(SAI_API_POLICER, log_level);
+    sai_log_set(SAI_API_PORT, log_level);
+    sai_log_set(SAI_API_QOS_MAP, log_level);
+    sai_log_set(SAI_API_ROUTE, log_level);
+    sai_log_set(SAI_API_ROUTER_INTERFACE, log_level);
+    sai_log_set(SAI_API_SWITCH, log_level);
+    sai_log_set(SAI_API_TUNNEL, log_level);
+    sai_log_set(SAI_API_VIRTUAL_ROUTER, log_level);
+    sai_log_set(SAI_API_VLAN, log_level);
+    sai_log_set(SAI_API_WRED, log_level);
 
     while (1) pause();
 
-    return 0;
+    return rv;
 }
