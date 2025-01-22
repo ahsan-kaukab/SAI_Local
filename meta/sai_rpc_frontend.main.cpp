@@ -422,7 +422,7 @@ void handleInitScript(const std::string& initScript)
     system(initScript.c_str());
 }
 
-void initialize_sai_api(sai_service_method_table_t * services) {
+/*void initialize_sai_api(sai_service_method_table_t * services) {
     // Open the shared library (if using dynamic loading)
     void *handle = dlopen("/SAI/SAI/meta/libsai.so", RTLD_LAZY);
     if (!handle) {
@@ -450,7 +450,7 @@ void initialize_sai_api(sai_service_method_table_t * services) {
 
     // Close the shared library after use
     dlclose(handle);
-}
+}*/
 
 int main(int argc, char **argv)
 {
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
     handleProfileMap(options.profileMapFile);
     handlePortMap(options.portMapFile);
 
-	initialize_sai_api((sai_service_method_table_t *)&test_services);
+	//initialize_sai_api((sai_service_method_table_t *)&test_services);
     //auto status = sai_api_initialize(0, (sai_service_method_table_t *)&test_services);
     //sai_api_query(SAI_API_SWITCH, (void**)&sai_switch_api);
     
